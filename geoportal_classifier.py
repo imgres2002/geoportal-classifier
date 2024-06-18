@@ -7,7 +7,6 @@ import joblib
 import numpy as np
 from las_file_manager import PointCloudManager
 import matplotlib.pyplot as plt
-from settings import COLUMNS
 from typing import Optional, Tuple
 import time
 
@@ -93,7 +92,7 @@ class GeoportalClassifier:
         """
         importances = self.model.feature_importances_
         indices = np.argsort(importances)[::-1]
-        columns = np.array(COLUMNS)
+        columns = self.model.feature_names_in_
 
         plt.figure(figsize=(12, 8))
         plt.title("Feature importances")
