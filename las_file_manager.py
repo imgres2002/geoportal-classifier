@@ -280,7 +280,8 @@ class PointCloudManager:
         print("Calculating min, max, mean, height_difference height time:", time.time() - start_time)
 
         start_time = time.time()
-        clusters = self.grid_cluster(np.arange(len(self.points)))
+        clusters = grid_cluster.GridCluster(self,  "2d")
+        clusters.perform_clustering()
         print("Calculating grid_cluster time:", time.time() - start_time)
 
         start_time = time.time()
@@ -480,51 +481,3 @@ class PointCloudManager:
         self.classifications[ground_points_indices] = 2
         self.classifications[tree_points_indices] = 5
         self.classifications[building_points_indices] = 6
-
-    def grid_cluster(self, indices: np.ndarray, square_size: int = 3125, min_square_size: int = 5) -> \
-            Union[List[np.ndarray], List[List[np.ndarray]]]:
-        """
-        Clusters points within a grid-based scheme.
-
-        This method divides the points into square grid cells based on the specified square size. If the square size
-        is greater than or equal to the minimum square size, it recursively clusters points within each cell.
-
-        Args:
-            indices (np.ndarray): Indices of points to be clustered.
-            square_size (int): Size of each square grid cell, by default 3125.
-            min_square_size (int): Minimum size of a square grid cell, by default 5.
-
-        Returns: Union[List[np.ndarray], List[List[np.ndarray]]]: List of arrays, where each array contains the
-        indices of points in a cluster.
-        """
-        points = self.points[indices][:, [0, 1]]
-        array_dict = {i: indices[i] for i in range(len(indices))}
-
-        min_x, min_y = np.min(points, axis=0)
-        max_x, max_y = np.max(points, axis=0)
-
-        num_squares_x = int(np.ceil((max_x - min_x) / square_size))
-        num_squares_y = int(np.ceil((max_y - min_y) / square_size))
-
-        chunks_indices = []
-
-        digitized_x = np.digitize(points[:, 0], bins=np.linspace(min_x, max_x, num_squares_x + 1))
-        digitized_y = np.digitize(points[:, 1], bins=np.linspace(min_y, max_y, num_squares_y + 1))
-
-        for i in range(1, num_squares_x + 1):
-            for j in range(1, num_squares_y + 1):
-                indices = np.where((digitized_x == i) & (digitized_y == j))[0]
-
-                if len(indices) > 0:
-                    values = [array_dict[key] for key in indices]
-                    chunks_indices.append(np.array(values))
-
-        if square_size >= min_square_size:
-            flattened_array = []
-            for chunk_ind in chunks_indices:
-                chunk = self.grid_cluster(chunk_ind, int(square_size / 5))
-                for ind in chunk:
-                    flattened_array.append(ind)
-            return flattened_array
-        else:
-            return chunks_indices
