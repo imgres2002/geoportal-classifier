@@ -270,7 +270,7 @@ class PointCloudManager:
     def get_model_values(self, ind: np.ndarray, ground_classifications: Optional[List[int]] = None) -> \
             Dict[str, np.ndarray]:
         """
-        Calculates and returns various model values based on the given point indices and optional ground classes.
+        Calculates and returns various model features based on the given point indices and optional ground classes.
 
         Args: ind (np.ndarray): Array of point indices to process. ground_classifications (Optional[List[int]]): List
         of ground classes to be used in height normalization. Defaults to None.
@@ -278,7 +278,6 @@ class PointCloudManager:
         Returns:
             Dict[str, np.ndarray]: Dictionary containing names and values of various model features.
         """
-
         start_time = time.time()
         normalized_points, classes = self.normalize_height(cloth_resolution=1, voxel_size=1, num_neighbors=8,
                                                            ground_classifications=ground_classifications)
@@ -300,66 +299,58 @@ class PointCloudManager:
         print("Calculating normal vectors time:", time.time() - start_time)
 
         start_time = time.time()
-        ball_frequency, cylinder_frequency = self.compute_frequency()
-        print("Calculating frequency time:", time.time() - start_time)
-
-        start_time = time.time()
         min_height, max_height, mean_height, height_difference = self.calculate_min_max_mean_height(normalized_points)
         print("Calculating min, max, mean, height_difference height time:", time.time() - start_time)
 
         start_time = time.time()
-        clusters = grid_cluster.GridCluster(self,  "2d")
-        clusters.perform_clustering()
-        print("Calculating grid_cluster time:", time.time() - start_time)
+        functions = [
+            'sum_of_eigenvalues', 'omnivariance', 'eigenentropy', 'anisotropy',
+            'linearity', 'planarity', 'sphericity', 'pca1', 'pca2',
+            'surface_variation', 'verticality'
+        ]
+        kd_tree_ball = spatial.cKDTree(self.points)
+        ball_neighbor_indices = kd_tree_ball.query_ball_tree(kd_tree_ball, 2, p=2)
+
+        covariance_kd_tree_results = self.process_clusters_with_functions(functions, ball_neighbor_indices)
+        print("Calculating features in covariance matrix time:", time.time() - start_time)
 
         start_time = time.time()
-        min_phi_cluster, max_phi_cluster, mean_phi_cluster = self.feature_in_cluster(clusters, phi)
-        min_theta_cluster, max_theta_cluster, mean_theta_cluster = self.feature_in_cluster(clusters, theta)
-        (min_normal_vectors_x_cluster,
-         max_normal_vectors_x_cluster,
-         mean_normal_vectors_x_cluster) = self.feature_in_cluster(
-            clusters, normal_vectors_x)
-        (min_normal_vectors_y_cluster,
-         max_normal_vectors_y_cluster,
-         mean_normal_vectors_y_cluster) = self.feature_in_cluster(
-            clusters, normal_vectors_y)
-        (min_normal_vectors_z_cluster,
-         max_normal_vectors_z_cluster,
-         mean_normal_vectors_z_cluster) = self.feature_in_cluster(
-            clusters, normal_vectors_z)
-        print("Calculating features min,max and mean in cluster time:", time.time() - start_time)
+        kd_tree_cylinder = spatial.cKDTree(self.points[:, :2])
+        cylinder_neighbor_indices = kd_tree_cylinder.query_ball_tree(kd_tree_cylinder, 2, p=2)
+        clusters_list = [cylinder_neighbor_indices]
+        cluster_suffixes = ['cylinder_neighbor_indices']
+        features_list = [
+            (normalized_points[:, 2], 'z'),
+            (self.point_cloud.intensity[self.ind], 'intensity'),
+            (normal_vectors_z, 'normal_vectors_z'),
+            (min_height, 'min_height'),
+            (max_height, 'max_height'),
+            (mean_height, 'mean_height'),
+            (height_difference, 'height_difference')
+        ]
 
+        results = {}
+
+        for cluster_suffix, clusters in zip(cluster_suffixes, clusters_list):
+            for feature, base_name in features_list:
+                min_val, max_val, mean_val = self.feature_in_cluster(clusters, feature)
+                results[f'min_{base_name}_{cluster_suffix}'] = min_val
+                results[f'max_{base_name}_{cluster_suffix}'] = max_val
+                results[f'mean_{base_name}_{cluster_suffix}'] = mean_val
+
+        print("Calculating min,max and mean in cluster time:", time.time() - start_time)
         self.new_classification_values()
 
         return {
             "z": normalized_points[:, 2],
             "intensity": self.point_cloud.intensity[self.ind],
-            "normal_vectors_x": normal_vectors_x,
-            "normal_vectors_y": normal_vectors_y,
             "normal_vectors_z": normal_vectors_z,
-            "phi": phi,
-            "theta": theta,
             "min_height": min_height,
             "max_height": max_height,
             "mean_height": mean_height,
             "height_difference": height_difference,
-            "ball_frequency": ball_frequency,
-            "cylinder_frequency": cylinder_frequency,
-            'min_phi_cluster': min_phi_cluster,
-            'max_phi_cluster': max_phi_cluster,
-            'mean_phi_cluster': mean_phi_cluster,
-            'min_theta_cluster': min_theta_cluster,
-            'max_theta_cluster': max_theta_cluster,
-            'mean_theta_cluster': mean_theta_cluster,
-            'min_normal_vectors_x_cluster': min_normal_vectors_x_cluster,
-            'max_normal_vectors_x_cluster': max_normal_vectors_x_cluster,
-            'mean_normal_vectors_x_cluster': mean_normal_vectors_x_cluster,
-            'min_normal_vectors_y_cluster': min_normal_vectors_y_cluster,
-            'max_normal_vectors_y_cluster': max_normal_vectors_y_cluster,
-            'mean_normal_vectors_y_cluster': mean_normal_vectors_y_cluster,
-            'min_normal_vectors_z_cluster': min_normal_vectors_z_cluster,
-            'max_normal_vectors_z_cluster': max_normal_vectors_z_cluster,
-            'mean_normal_vectors_z_cluster': mean_normal_vectors_z_cluster
+            **covariance_kd_tree_results,
+            **results
         }
 
     @staticmethod
