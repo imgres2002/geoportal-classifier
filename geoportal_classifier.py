@@ -74,6 +74,22 @@ def shuffle_dataset(features: pd.DataFrame, y_train: np.ndarray) -> Tuple[pd.Dat
 
     return features, y_train
 
+def visualize_all_features(las_file_manager: PointCloudManager, features: pd.DataFrame) -> None:
+    """
+    Visualizes colored all features in the provided DataFrame using the PointCloudManager.
+
+    Args:
+        las_file_manager (PointCloudManager): An instance of PointCloudManager to manage and visualize point cloud data.
+        features (pd.DataFrame): A DataFrame containing features to be visualized.
+
+    Returns:
+        None
+    """
+    for key, value in features.items():
+        print(f"Processing variable: {key}")
+        las_file_manager.color_array(np.array(value))
+        las_file_manager.visualize()
+
 
 class GeoportalClassifier:
     def __init__(self):
