@@ -239,6 +239,34 @@ class PointCloudManager:
         for i, unique_classification in enumerate(unique_classifications):
             self.classifications[self.classifications == unique_classification] = i
 
+    def process_clusters_with_functions(self, functions: list[str], clusters: list[list[int]]) -> dict[str, np.ndarray]:
+        """
+        Process clusters of points using specified covariance matrix functions and return the results.
+
+        Args:
+            functions (list[str]): A list of function names (as strings) to apply to the covariance matrix of each cluster.
+            clusters (list[list[int]]): A list of clusters, where each cluster is a list of indices corresponding to points in self.points.
+
+        Returns:
+            dict[str, np.ndarray]: A dictionary where keys are function names and values are arrays with the computed results for each cluster.
+        """
+        results = {func: np.zeros(len(self.points)) for func in functions}
+
+        for cluster in clusters:
+            if len(cluster) > 1:
+                cov = CovarianceMatrix(self.points[cluster])
+                for func in functions:
+                    result = getattr(cov, func)()
+                    if np.isnan(result):
+                        results[func][cluster] = 0
+                    else:
+                        results[func][cluster] = result
+            else:
+                for func in functions:
+                    results[func][cluster] = 0
+
+        return results
+
     def get_model_values(self, ind: np.ndarray, ground_classifications: Optional[List[int]] = None) -> \
             Dict[str, np.ndarray]:
         """
